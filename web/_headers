@@ -1,0 +1,14 @@
+# Cloudflare Pages response headers.
+# Generated from _headers.template by build.sh; the CONNECT_SRC placeholder becomes the
+# API origin from UMA_API_BASE (or a permissive default when it is unset).
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Cross-Origin-Opener-Policy: same-origin
+  X-Robots-Tag: noindex, nofollow
+
+/config.js
+  Cache-Control: no-cache

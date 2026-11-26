@@ -1,0 +1,4 @@
+/superlight-uma
+*.db
+*.db-shm
+*.db-wal

@@ -1,0 +1,6 @@
+# Site block for the reverse proxy. install.sh --caddy appends it to
+# /etc/caddy/Caddyfile with uma.example.com replaced by $UMA_DOMAIN, then runs
+#   caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy
+uma.example.com {
+	reverse_proxy 127.0.0.1:8082
+}

@@ -1,0 +1,56 @@
+[Unit]
+Description=superlight-uma anonymous active-device counter
+Documentation=https://github.com/DYD-Tech/superlight-uma
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=superlight-uma
+Group=superlight-uma
+EnvironmentFile=/etc/superlight-uma/superlight-uma.env
+# Soft limit for the Go GC, kept below the hard cgroup cap.
+Environment=GOMEMLIMIT=40MiB
+ExecStart=/opt/superlight-uma/superlight-uma
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+
+# Data dir /var/lib/superlight-uma, owned by the service user.
+StateDirectory=superlight-uma
+StateDirectoryMode=0750
+ReadWritePaths=/var/lib/superlight-uma
+UMask=0077
+
+# Resource caps (1 GB host).
+MemoryMax=64M
+MemoryHigh=56M
+TasksMax=64
+
+# Hardening.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+[Install]
+WantedBy=multi-user.target
