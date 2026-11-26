@@ -1,8 +1,8 @@
 # superlight-uma
 
-[English](README.md) | 简体中文
+**An open-source, ultra-lightweight framework for counting anonymous active devices (heartbeats). 一个开源、超轻量的匿名活跃设备（心跳）统计框架。**
 
-**一个开源、超轻量的匿名活跃设备（心跳）统计框架。**
+[English](README.md) | 简体中文
 
 源码本身不属于任何具体产品：任何人都可以从源码编译、部署一份，再用**这份部署自己的配置文件**（环境变量）决定它为哪些应用服务、谁能查看数据、允许哪些网页跨域访问。一份部署 = 一个实例；同一套代码可以部署出任意多个互不相干的实例。
 
