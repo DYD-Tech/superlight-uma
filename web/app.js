@@ -17,6 +17,9 @@ const SERIES = [
 
 const $ = (id) => document.getElementById(id);
 
+const ALL_PLATFORMS = "__all__";
+const EMPTY_PLATFORM = "__empty__";
+
 const state = {
   base: DEFAULT_BASE,
   key: "",
@@ -26,6 +29,8 @@ const state = {
   rows: [],
   seq: 0,
   keyless: false, // server has no admin key configured
+  platform: null, // null = all platforms; string (possibly "") = filter
+  platforms: [],
 };
 
 // ---------- persistence ----------
@@ -183,6 +188,100 @@ function renderCards(st) {
   for (const k of ["dau", "wau", "mau", "total"]) $(`v-${k}`).textContent = st ? fmt.format(st[k]) : "–";
 }
 
+function platformLabel(platform) {
+  return platform === "" ? "未填写" : platform;
+}
+
+function platformOptionValue(platform) {
+  return platform === "" ? EMPTY_PLATFORM : platform;
+}
+
+function syncPlatformSelect() {
+  const sel = $("platform-select");
+  if (!sel) return;
+  const prev = state.platform;
+  sel.replaceChildren();
+  const all = document.createElement("option");
+  all.value = ALL_PLATFORMS;
+  all.textContent = "全部平台";
+  sel.appendChild(all);
+  let stillValid = prev === null;
+  for (const p of state.platforms) {
+    const opt = document.createElement("option");
+    opt.value = platformOptionValue(p.platform);
+    opt.textContent = platformLabel(p.platform);
+    sel.appendChild(opt);
+    if (prev !== null && p.platform === prev) stillValid = true;
+  }
+  if (!stillValid) state.platform = null;
+  if (state.platform === null) sel.value = ALL_PLATFORMS;
+  else sel.value = platformOptionValue(state.platform);
+}
+
+function renderPlatforms() {
+  const box = $("platform-list");
+  if (!box) return;
+  box.replaceChildren();
+  const platforms = state.platforms;
+  if (!platforms.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty muted";
+    empty.textContent = "暂无平台数据";
+    box.appendChild(empty);
+    return;
+  }
+  const max = Math.max(...platforms.map((p) => p.total), 1);
+  for (const p of platforms) {
+    const selected = state.platform !== null && state.platform === p.platform;
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "platform-row";
+    row.setAttribute("aria-pressed", String(selected));
+
+    const head = document.createElement("span");
+    head.className = "platform-row-head";
+    const name = document.createElement("span");
+    name.className = "platform-name";
+    name.textContent = platformLabel(p.platform);
+    const total = document.createElement("span");
+    total.className = "platform-total";
+    total.textContent = `总设备 ${fmt.format(p.total)}`;
+    head.append(name, total);
+
+    const bar = document.createElement("span");
+    bar.className = "platform-bar";
+    const fill = document.createElement("i");
+    fill.style.width = `${(p.total / max) * 100}%`;
+    bar.appendChild(fill);
+
+    const metrics = document.createElement("span");
+    metrics.className = "platform-metrics";
+    for (const [label, value] of [
+      ["今日 DAU", p.dau],
+      ["7日 WAU", p.wau],
+      ["30日 MAU", p.mau],
+    ]) {
+      const item = document.createElement("span");
+      item.textContent = `${label} ${fmt.format(value)}`;
+      metrics.appendChild(item);
+    }
+
+    row.append(head, bar, metrics);
+    row.addEventListener("click", () => {
+      state.platform = selected ? null : p.platform;
+      syncPlatformSelect();
+      refresh();
+    });
+    box.appendChild(row);
+  }
+}
+
+function queryParams(extra = {}) {
+  const params = { app_id: state.app, ...extra };
+  if (state.platform !== null) params.platform = state.platform;
+  return params;
+}
+
 // ---------- data ----------
 async function loadApps() {
   try {
@@ -210,15 +309,19 @@ async function refresh() {
   setError($("dash-error"), "");
   try {
     const [stats, hist] = await Promise.all([
-      api("/v1/stats", { app_id: state.app }),
-      api("/v1/stats/history", { app_id: state.app, days: state.days }),
+      api("/v1/stats", queryParams()),
+      api("/v1/stats/history", queryParams({ days: state.days })),
     ]);
     if (seq !== state.seq) return;
+    state.platforms = Array.isArray(stats?.platforms) ? stats.platforms : [];
+    syncPlatformSelect();
     renderCards(stats);
+    renderPlatforms();
     state.rows = hist.days || [];
     drawChart();
     renderTable(state.rows);
-    $("footer").textContent = `数据来源 ${state.base} · 应用 ${state.app} · 更新于 ${new Date().toLocaleString("zh-CN")}`;
+    const platformNote = state.platform === null ? "全部平台" : platformLabel(state.platform);
+    $("footer").textContent = `数据来源 ${state.base} · 应用 ${state.app} · ${platformNote} · 更新于 ${new Date().toLocaleString("zh-CN")}`;
   } catch (e) {
     if (seq !== state.seq) return;
     if (e.status === 401) {
@@ -229,6 +332,9 @@ async function refresh() {
       return;
     }
     renderCards(null);
+    state.platforms = [];
+    syncPlatformSelect();
+    renderPlatforms();
     state.rows = [];
     drawChart();
     renderTable([]);
@@ -285,7 +391,11 @@ $("logout-btn").addEventListener("click", () => {
   clearCredentials();
   state.key = "";
   state.rows = [];
+  state.platform = null;
+  state.platforms = [];
   renderCards(null);
+  syncPlatformSelect();
+  renderPlatforms();
   showLogin("");
 });
 
@@ -295,7 +405,16 @@ $("app-input").addEventListener("change", () => {
   const v = $("app-input").value.trim();
   if (!v || v === state.app) return;
   state.app = v;
+  state.platform = null;
   savePrefs(Boolean(loadSaved().key));
+  refresh();
+});
+
+$("platform-select").addEventListener("change", () => {
+  const v = $("platform-select").value;
+  if (v === ALL_PLATFORMS) state.platform = null;
+  else if (v === EMPTY_PLATFORM) state.platform = "";
+  else state.platform = v;
   refresh();
 });
 

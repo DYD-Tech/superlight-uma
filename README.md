@@ -34,6 +34,7 @@ A stats service that does one thing: **count how many devices are using your app
 - Storage does not grow without bound:
   - `daily_activity` (which devices were active on which day) keeps only the last 31 days and is cleaned up automatically
   - `daily_summary` (daily DAU/WAU/MAU/total) is kept forever for historical trends
+  - `daily_platform_summary` (the same numbers, split by platform) is kept forever
   - `devices` (one row per device: first / last seen, latest version and platform)
 - SQLite by default (pure-Go driver `modernc.org/sqlite`); the storage layer is an interface and can be swapped for Postgres etc.
 - Admin endpoints can be protected with an admin key (Bearer token), or left open with no key
@@ -144,28 +145,33 @@ Content-Type: application/json
 
 ```
 GET /v1/stats?app_id=my-app
+GET /v1/stats?app_id=my-app&platform=windows
 Authorization: Bearer <UMA_ADMIN_KEY>
 
 → 200
-{"app_id":"my-app","day":"2026-11-25","dau":1234,"wau":5678,"mau":9012,"total":20000}
+{"app_id":"my-app","day":"2026-11-25","dau":1234,"wau":5678,"mau":9012,"total":20000,"platforms":[{"platform":"windows","dau":800,"wau":3000,"mau":5000,"total":12000},{"platform":"android","dau":434,"wau":2678,"mau":4012,"total":8000}]}
 ```
 
 - `dau`: distinct devices active today (UTC)
 - `wau`: distinct devices active in the last 7 days (including today)
 - `mau`: distinct devices active in the last 30 days (including today)
 - `total`: all devices ever seen
+- `platforms`: per-platform breakdown of those same fields, ordered by `total` descending then platform name. Always the full breakdown, even when a platform filter is applied.
+
+Optional `platform` query parameter (trimmed, lowercased, ≤64 characters). If omitted, the top-level counts are overall. If present, they are limited to that platform; `?platform=` (empty) selects devices that reported no platform. A value longer than 64 characters returns 400.
 
 ### History (key required only if an admin key is set)
 
 ```
 GET /v1/stats/history?app_id=my-app&days=30
+GET /v1/stats/history?app_id=my-app&days=30&platform=windows
 Authorization: Bearer <UMA_ADMIN_KEY>
 
 → 200
 {"app_id":"my-app","days":[{"app_id":"my-app","day":"2026-11-24","dau":...,"wau":...,"mau":...,"total":...}, ...]}
 ```
 
-`days` defaults to 30, range 1–3650. Summaries are computed hourly (configurable): yesterday's numbers are finalized at the first rollup after midnight UTC; today's numbers are provisional and get overwritten by later rollups.
+`days` defaults to 30, range 1–3650. The same optional `platform` filter as `/v1/stats` applies (`?platform=` selects devices with no platform). Summaries are computed hourly (configurable): yesterday's numbers are finalized at the first rollup after midnight UTC; today's numbers are provisional and get overwritten by later rollups. Per-platform history is stored in `daily_platform_summary` and filled by the same rollup.
 
 ### List registered apps (key required only if an admin key is set)
 

@@ -59,7 +59,22 @@ func (f *fixture) do(method, path, body string, hdr map[string]string) *httptest
 
 func (f *fixture) beat(t *testing.T, dev string) {
 	t.Helper()
-	rec := f.do("POST", "/v1/heartbeat", `{"app_id":"dyd-browser","device_id":"`+dev+`","version":"1.0.0","platform":"Windows"}`, nil)
+	f.beatWith(t, dev, "Windows")
+}
+
+func (f *fixture) beatWith(t *testing.T, dev, platform string) {
+	t.Helper()
+	f.beatBody(t, dev, `{"app_id":"dyd-browser","device_id":"`+dev+`","version":"1.0.0","platform":"`+platform+`"}`)
+}
+
+func (f *fixture) beatNoPlatform(t *testing.T, dev string) {
+	t.Helper()
+	f.beatBody(t, dev, `{"app_id":"dyd-browser","device_id":"`+dev+`","version":"1.0.0"}`)
+}
+
+func (f *fixture) beatBody(t *testing.T, dev, body string) {
+	t.Helper()
+	rec := f.do("POST", "/v1/heartbeat", body, nil)
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("heartbeat %s: %d %s", dev, rec.Code, rec.Body)
 	}
@@ -71,6 +86,7 @@ const (
 	dev1 = "3f1c2b4a-1d2e-4f60-8a9b-0c1d2e3f4a5b"
 	dev2 = "9e8d7c6b-5a4f-4e3d-9c2b-1a0f9e8d7c6b"
 	dev3 = "00000000-0000-4000-8000-000000000003"
+	dev4 = "00000000-0000-4000-8000-000000000004"
 )
 
 func TestHeartbeatValidation(t *testing.T) {
@@ -326,5 +342,162 @@ func TestNormalizeUUID(t *testing.T) {
 		if _, ok := normalizeUUID(bad); ok {
 			t.Errorf("%q accepted", bad)
 		}
+	}
+}
+
+func TestPlatformStatsAndHistory(t *testing.T) {
+	f := newFixture(t, nil)
+	ctx := context.Background()
+	start := f.now
+	// 10 days ago: dev3 android (MAU only). 3 days ago: dev2 windows (WAU).
+	// Today: dev1 windows, dev2 windows again, dev4 with no platform.
+	f.now = start.AddDate(0, 0, -10)
+	f.beatWith(t, dev3, "Android")
+	f.now = start.AddDate(0, 0, -3)
+	f.beatWith(t, dev2, "Windows")
+	f.now = start
+	f.beatWith(t, dev1, "Windows")
+	f.beatWith(t, dev2, "Windows")
+	f.beatNoPlatform(t, dev4)
+
+	rec := f.do("GET", "/v1/stats?app_id=dyd-browser", "", auth)
+	if rec.Code != 200 {
+		t.Fatalf("stats: %d %s", rec.Code, rec.Body)
+	}
+	var st statsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st.AppID != "dyd-browser" || st.Day != "2026-11-25" || st.DAU != 3 || st.WAU != 3 || st.MAU != 4 || st.Total != 4 {
+		t.Fatalf("overall stats: %+v", st.Stats)
+	}
+	if len(st.Platforms) != 3 {
+		t.Fatalf("platforms: %+v", st.Platforms)
+	}
+	wantPlats := []store.PlatformStat{
+		{Platform: "windows", DAU: 2, WAU: 2, MAU: 2, Total: 2},
+		{Platform: "", DAU: 1, WAU: 1, MAU: 1, Total: 1},
+		{Platform: "android", DAU: 0, WAU: 0, MAU: 1, Total: 1},
+	}
+	for i, want := range wantPlats {
+		if st.Platforms[i] != want {
+			t.Fatalf("platforms[%d]: got %+v want %+v\nall: %+v", i, st.Platforms[i], want, st.Platforms)
+		}
+	}
+
+	// Filter is case-insensitive and does not shrink the platforms array.
+	rec = f.do("GET", "/v1/stats?app_id=dyd-browser&platform=Windows", "", auth)
+	if rec.Code != 200 {
+		t.Fatalf("filtered stats: %d %s", rec.Code, rec.Body)
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st.DAU != 2 || st.WAU != 2 || st.MAU != 2 || st.Total != 2 {
+		t.Fatalf("windows stats: %+v", st.Stats)
+	}
+	if len(st.Platforms) != 3 || st.Platforms[0].Platform != "windows" {
+		t.Fatalf("filtered response should still include full breakdown: %+v", st.Platforms)
+	}
+
+	// ?platform= selects devices that reported no platform.
+	rec = f.do("GET", "/v1/stats?app_id=dyd-browser&platform=", "", auth)
+	if rec.Code != 200 {
+		t.Fatalf("empty platform: %d %s", rec.Code, rec.Body)
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st.DAU != 1 || st.WAU != 1 || st.MAU != 1 || st.Total != 1 {
+		t.Fatalf("empty platform stats: %+v", st.Stats)
+	}
+
+	rec = f.do("GET", "/v1/stats?app_id=dyd-browser&platform=linux", "", auth)
+	if rec.Code != 200 {
+		t.Fatal(rec.Body)
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st.DAU != 0 || st.Total != 0 {
+		t.Fatalf("unknown platform stats: %+v", st.Stats)
+	}
+
+	long := strings.Repeat("x", 65)
+	if rec := f.do("GET", "/v1/stats?app_id=dyd-browser&platform="+long, "", auth); rec.Code != 400 {
+		t.Errorf("overlong platform: %d %s", rec.Code, rec.Body)
+	}
+	if rec := f.do("GET", "/v1/stats/history?app_id=dyd-browser&platform="+long, "", auth); rec.Code != 400 {
+		t.Errorf("overlong platform history: %d %s", rec.Code, rec.Body)
+	}
+
+	// History without a rollup is empty; after Maintain it is filled (including today).
+	rec = f.do("GET", "/v1/stats/history?app_id=dyd-browser&days=30&platform=windows", "", auth)
+	if rec.Code != 200 {
+		t.Fatalf("history before rollup: %d %s", rec.Code, rec.Body)
+	}
+	var hist struct {
+		Days []store.Stats `json:"days"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &hist); err != nil {
+		t.Fatal(err)
+	}
+	if len(hist.Days) != 0 {
+		t.Fatalf("expected no per-platform history before rollup, got %+v", hist.Days)
+	}
+
+	if err := f.srv.Maintain(ctx); err != nil {
+		t.Fatal(err)
+	}
+	rec = f.do("GET", "/v1/stats/history?app_id=dyd-browser&days=15&platform=windows", "", auth)
+	if rec.Code != 200 {
+		t.Fatalf("windows history: %d %s", rec.Code, rec.Body)
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &hist); err != nil {
+		t.Fatal(err)
+	}
+	// Maintain rolls up yesterday (empty of windows? yesterday has no activity in this test)
+	// and today. Yesterday is 2026-11-24. start is 2026-11-25.
+	// On 2026-11-24: no heartbeats that day. windows: DAU 0, WAU 1 (dev2 on -3 days = 11-22), MAU 2 (dev2 + dev1? dev1 is today only so not in yesterday).
+	// Careful: Maintain uses s.Now() which is `start` (today). It rolls up yesterday and today.
+	// Yesterday 2026-11-24:
+	//   windows DAU: 0 (no activity that day)
+	//   windows WAU: last 7 days of yesterday = 11-18 to 11-24: dev2 on 11-22. DAU 0, WAU 1, MAU 1 (dev3 is android). Total 1 (only dev2 first_day 11-22; dev1 first_day is today)
+	//   android: DAU 0, WAU 0, MAU 1 (dev3 on 11-15), Total 1
+	//   empty: all 0, Total 0 — not in breakdown because no devices with first_day <= yesterday and platform ""
+	// Today 2026-11-25:
+	//   windows: DAU 2, WAU 2, MAU 2, Total 2
+	if len(hist.Days) != 2 {
+		t.Fatalf("windows history days: %+v", hist.Days)
+	}
+	if hist.Days[0].Day != "2026-11-24" || hist.Days[0].DAU != 0 || hist.Days[0].WAU != 1 || hist.Days[0].MAU != 1 || hist.Days[0].Total != 1 {
+		t.Fatalf("windows yesterday: %+v", hist.Days[0])
+	}
+	if hist.Days[1].Day != "2026-11-25" || hist.Days[1].DAU != 2 || hist.Days[1].WAU != 2 || hist.Days[1].MAU != 2 || hist.Days[1].Total != 2 {
+		t.Fatalf("windows today: %+v", hist.Days[1])
+	}
+
+	rec = f.do("GET", "/v1/stats/history?app_id=dyd-browser&days=15&platform=", "", auth)
+	if rec.Code != 200 {
+		t.Fatalf("empty history: %d %s", rec.Code, rec.Body)
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &hist); err != nil {
+		t.Fatal(err)
+	}
+	// empty platform only exists today (first_day today), so yesterday has no row.
+	if len(hist.Days) != 1 || hist.Days[0].Day != "2026-11-25" || hist.Days[0].DAU != 1 || hist.Days[0].Total != 1 {
+		t.Fatalf("empty platform history: %+v", hist.Days)
+	}
+
+	// Unfiltered history still works and includes yesterday + today.
+	rec = f.do("GET", "/v1/stats/history?app_id=dyd-browser&days=15", "", auth)
+	if rec.Code != 200 {
+		t.Fatalf("overall history: %d %s", rec.Code, rec.Body)
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &hist); err != nil {
+		t.Fatal(err)
+	}
+	if len(hist.Days) != 2 || hist.Days[1].DAU != 3 || hist.Days[1].Total != 4 {
+		t.Fatalf("overall history after rollup: %+v", hist.Days)
 	}
 }

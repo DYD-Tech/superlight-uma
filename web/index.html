@@ -53,6 +53,12 @@
           <input id="app-input" list="app-list" placeholder="app_id" spellcheck="false" autocapitalize="off">
           <datalist id="app-list"></datalist>
         </label>
+        <label class="platform-picker">
+          <span class="sr-only">平台</span>
+          <select id="platform-select">
+            <option value="__all__">全部平台</option>
+          </select>
+        </label>
         <button id="refresh-btn" type="button" title="刷新">刷新</button>
         <button id="logout-btn" type="button" class="ghost" title="退出并清除保存的密钥">退出</button>
       </div>
@@ -66,6 +72,11 @@
         <article class="card"><h2>周活 WAU</h2><p class="value" id="v-wau">–</p><p class="hint">最近 7 天</p></article>
         <article class="card"><h2>月活 MAU</h2><p class="value" id="v-mau">–</p><p class="hint">最近 30 天</p></article>
         <article class="card"><h2>总设备</h2><p class="value" id="v-total">–</p><p class="hint">历史累计</p></article>
+      </section>
+
+      <section class="panel" aria-label="平台分布">
+        <div class="panel-head"><h2>平台分布</h2></div>
+        <div id="platform-list" class="platform-list"></div>
       </section>
 
       <section class="panel">

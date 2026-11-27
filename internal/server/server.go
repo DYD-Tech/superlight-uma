@@ -117,22 +117,53 @@ func (s *Server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type statsResponse struct {
+	store.Stats
+	Platforms []store.PlatformStat `json:"platforms"`
+}
+
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	app, ok := s.appParam(w, r)
 	if !ok {
 		return
 	}
-	st, err := s.store.Stats(r.Context(), app, store.Day(s.Now()))
+	platform, filtered, ok := s.platformParam(w, r)
+	if !ok {
+		return
+	}
+	day := store.Day(s.Now())
+	var (
+		st  store.Stats
+		err error
+	)
+	if filtered {
+		st, err = s.store.StatsByPlatform(r.Context(), app, day, platform)
+	} else {
+		st, err = s.store.Stats(r.Context(), app, day)
+	}
 	if err != nil {
 		s.log.Error("stats", "err", err)
 		writeErr(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	writeJSON(w, http.StatusOK, st)
+	plats, err := s.store.PlatformBreakdown(r.Context(), app, day)
+	if err != nil {
+		s.log.Error("platform breakdown", "err", err)
+		writeErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if plats == nil {
+		plats = []store.PlatformStat{}
+	}
+	writeJSON(w, http.StatusOK, statsResponse{Stats: st, Platforms: plats})
 }
 
 func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 	app, ok := s.appParam(w, r)
+	if !ok {
+		return
+	}
+	platform, filtered, ok := s.platformParam(w, r)
 	if !ok {
 		return
 	}
@@ -146,7 +177,15 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		days = n
 	}
 	since := store.Day(s.Now().UTC().AddDate(0, 0, -(days - 1)))
-	hist, err := s.store.History(r.Context(), app, since)
+	var (
+		hist []store.Stats
+		err  error
+	)
+	if filtered {
+		hist, err = s.store.HistoryByPlatform(r.Context(), app, since, platform)
+	} else {
+		hist, err = s.store.History(r.Context(), app, since)
+	}
 	if err != nil {
 		s.log.Error("history", "err", err)
 		writeErr(w, http.StatusInternalServerError, "internal error")
@@ -176,6 +215,22 @@ func (s *Server) appParam(w http.ResponseWriter, r *http.Request) (string, bool)
 		return "", false
 	}
 	return app, true
+}
+
+// platformParam parses the optional platform query parameter.
+// If the parameter is absent, filtered is false (all platforms).
+// If it is present — including ?platform= — the value is trimmed and
+// lowercased and filtered is true; a value longer than maxFieldLen is a 400.
+func (s *Server) platformParam(w http.ResponseWriter, r *http.Request) (string, bool, bool) {
+	if !r.URL.Query().Has("platform") {
+		return "", false, true
+	}
+	p := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("platform")))
+	if len(p) > maxFieldLen {
+		writeErr(w, http.StatusBadRequest, "platform too long")
+		return "", false, false
+	}
+	return p, true, true
 }
 
 // admin protects next with the admin bearer key. With no key configured the

@@ -34,6 +34,7 @@
 - 存储不会无限增长：
   - `daily_activity`（每天哪些设备活跃过）只保留最近 31 天，自动清理
   - `daily_summary`（每天的 DAU/WAU/MAU/总数汇总）永久保留，用于看历史趋势
+  - `daily_platform_summary`（按平台拆分的同样指标）永久保留
   - `devices`（每台设备一行：首次 / 最后出现时间、最近一次的版本和平台）
 - 默认使用 SQLite（纯 Go 驱动 `modernc.org/sqlite`），存储层是接口，可替换为 Postgres 等
 - 管理接口可用管理密钥（Bearer Token）保护，也可以不设密钥公开访问
@@ -144,28 +145,33 @@ Content-Type: application/json
 
 ```
 GET /v1/stats?app_id=my-app
+GET /v1/stats?app_id=my-app&platform=windows
 Authorization: Bearer <UMA_ADMIN_KEY>
 
 → 200
-{"app_id":"my-app","day":"2026-11-25","dau":1234,"wau":5678,"mau":9012,"total":20000}
+{"app_id":"my-app","day":"2026-11-25","dau":1234,"wau":5678,"mau":9012,"total":20000,"platforms":[{"platform":"windows","dau":800,"wau":3000,"mau":5000,"total":12000},{"platform":"android","dau":434,"wau":2678,"mau":4012,"total":8000}]}
 ```
 
 - `dau`：今天（UTC）活跃的不同设备数
 - `wau`：最近 7 天（含今天）活跃的不同设备数
 - `mau`：最近 30 天（含今天）活跃的不同设备数
 - `total`：历史上见过的所有设备数
+- `platforms`：按平台拆分的同样字段，按 `total` 降序、再按平台名升序。即使使用了平台筛选，这里也始终是完整分布。
+
+可选查询参数 `platform`（会去掉首尾空格并转成小写，≤64 字符）。不传时，顶层数字是全平台合计；传入时则只统计该平台；`?platform=`（空值）表示筛选未填写平台的设备。超过 64 字符返回 400。
 
 ### 查询历史趋势（设置了管理密钥时需要）
 
 ```
 GET /v1/stats/history?app_id=my-app&days=30
+GET /v1/stats/history?app_id=my-app&days=30&platform=windows
 Authorization: Bearer <UMA_ADMIN_KEY>
 
 → 200
 {"app_id":"my-app","days":[{"app_id":"my-app","day":"2026-11-24","dau":...,"wau":...,"mau":...,"total":...}, ...]}
 ```
 
-`days` 默认 30，范围 1–3650。汇总每小时（可配置）计算一次：昨天的数据在跨日后的第一次计算时定稿，今天的数据是阶段值，会被后续计算覆盖。
+`days` 默认 30，范围 1–3650。与 `/v1/stats` 相同的可选 `platform` 筛选在这里也适用（`?platform=` 表示未填写平台的设备）。汇总每小时（可配置）计算一次：昨天的数据在跨日后的第一次计算时定稿，今天的数据是阶段值，会被后续计算覆盖。按平台的历史写在 `daily_platform_summary` 里，由同一次汇总任务写入。
 
 ### 列出已登记应用（设置了管理密钥时需要）
 
