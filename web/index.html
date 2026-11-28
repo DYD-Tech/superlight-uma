@@ -79,20 +79,37 @@
         <div id="platform-list" class="platform-list"></div>
       </section>
 
-      <section class="panel">
-        <div class="panel-head">
-          <h2>趋势</h2>
-          <div class="segmented" role="group" aria-label="时间范围" id="range">
-            <button type="button" data-days="7">7 天</button>
-            <button type="button" data-days="30">30 天</button>
-            <button type="button" data-days="90">90 天</button>
-            <button type="button" data-days="365">365 天</button>
+      <section class="charts" aria-label="趋势">
+        <section class="panel">
+          <div class="panel-head chart-head">
+            <h2>日活 DAU</h2>
+            <p class="muted small-text">每天 · 最近 30 天（UTC）</p>
           </div>
-        </div>
-        <div class="legend" id="legend"></div>
-        <div class="chart" id="chart" aria-label="趋势图"></div>
-        <p class="muted small-text">每日汇总每小时更新一次，今天的数据为阶段值。日期按 UTC 计算。</p>
+          <div class="chart" id="chart-dau" aria-label="日活趋势"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-head chart-head">
+            <h2>周活 WAU</h2>
+            <p class="muted small-text">ISO 周（周一至周日）· 最近 12 周。取该周日的 7 日去重快照，本周为实时值。</p>
+          </div>
+          <div class="chart" id="chart-wau" aria-label="周活趋势"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-head chart-head">
+            <h2>月活 MAU</h2>
+            <p class="muted small-text">自然月 · 最近 12 个月。取月末的 30 日去重快照，本月为实时值。</p>
+          </div>
+          <div class="chart" id="chart-mau" aria-label="月活趋势"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-head chart-head">
+            <h2>总设备</h2>
+            <p class="muted small-text">每天 · 最近 30 天（UTC）</p>
+          </div>
+          <div class="chart" id="chart-total" aria-label="总设备趋势"></div>
+        </section>
       </section>
+      <p class="muted small-text">今天的点来自实时统计，历史来自每小时汇总；没有数据的日期 / 周 / 月按 0 显示。日期按 UTC 计算。</p>
 
       <section class="panel">
         <div class="panel-head"><h2>每日明细</h2></div>

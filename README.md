@@ -362,7 +362,9 @@ The database lives at `/data/uma.db` inside the container; always mount a volume
 - Keyless mode: when the instance has no `UMA_ADMIN_KEY`, the page first probes `/v1/apps` without a key and, if that succeeds, opens the dashboard directly (the top-right button becomes "Settings"); the key field in the login box may also be left empty
 - App picker: reads registered apps from `/v1/apps`, or type an app_id manually
 - Today's DAU / WAU / MAU / total device cards
-- Trend chart (7 / 30 / 90 / 365 days, toggle each metric, hover or tap for values) and a daily table
+- Platform breakdown and a platform filter (the cards, charts and daily table all follow the selected platform)
+- Four separate trend charts in a 2×2 grid, each with its own Y-axis: DAU and total devices by UTC day (last 30 days); WAU by ISO week (last 12 weeks, Monday–Sunday, value = the 7-day distinct count already stored on that Sunday, or today's live value for the current week); MAU by calendar month (last 12 months, value = the 30-day distinct count already stored on the last day of the month, or today's live value for the current month). The X-axis always covers the full window; days/weeks/months with no data are plotted as 0. Today's point is taken from live `/v1/stats` so it does not wait for the hourly rollup. Hover or tap to read values.
+- Daily detail table for the last 30 days (also zero-filled)
 - Mobile-friendly, follows the system dark mode
 - Error messages: wrong key (401), unregistered app, network failure / CORS not allowed, etc.
 

@@ -154,6 +154,11 @@ button.ghost { background: transparent; }
 .legend button[aria-pressed="false"] { opacity: .4; }
 .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 
+.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chart-head { display: block; align-items: flex-start; }
+.chart-head .small-text { margin: 4px 0 0; }
+.charts .chart { height: 240px; }
+
 .chart { position: relative; width: 100%; height: 300px; touch-action: pan-y; }
 .chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .chart .grid line { stroke: var(--grid); }
@@ -209,6 +214,7 @@ td.empty { text-align: center; color: var(--muted); padding: 24px; }
   .topbar { padding: 10px 12px; }
   .toolbar { min-width: 0; flex-basis: 100%; }
   .app-picker, .platform-picker { flex: 1; }
-  .chart { height: 240px; }
+  .charts { grid-template-columns: 1fr; }
+  .chart, .charts .chart { height: 220px; }
   .panel { padding: 14px; }
 }

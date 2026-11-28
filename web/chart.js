@@ -40,7 +40,7 @@ export function renderChart(container, rows, series) {
 
   if (!rows.length || !series.length) {
     el("text", { x: width / 2, y: height / 2, "text-anchor": "middle", class: "empty" }, svg).textContent =
-      rows.length ? "请选择至少一个指标" : "暂无数据（每日汇总每小时生成一次）";
+      rows.length ? "请选择至少一个指标" : "暂无数据";
     return;
   }
 
@@ -62,7 +62,7 @@ export function renderChart(container, rows, series) {
   rows.forEach((r, i) => {
     if (i % labelEvery !== 0 && i !== rows.length - 1) return;
     if (i !== rows.length - 1 && rows.length - 1 - i < labelEvery * 0.8) return; // avoid overlap with last label
-    el("text", { x: x(i), y: height - 6, "text-anchor": "middle" }, axis).textContent = shortDay(r.day);
+    el("text", { x: x(i), y: height - 6, "text-anchor": "middle" }, axis).textContent = r.tick || shortDay(r.day);
   });
 
   const g = el("g", { class: "series" }, svg);
@@ -91,7 +91,7 @@ export function renderChart(container, rows, series) {
     hoverLine.setAttribute("visibility", "visible");
     tip.replaceChildren();
     const b = document.createElement("b");
-    b.textContent = r.day;
+    b.textContent = r.label || r.day;
     tip.appendChild(b);
     for (const s of series) {
       const row = document.createElement("div");
